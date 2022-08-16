@@ -1,0 +1,36 @@
+.program pulse
+
+; Turn on LED for 100 cycles and off for 100 cycles.
+; At 2 kHz, this will toggle pin at 10 Hz (200 cycles / 2000 Hz = 0.1 sec)
+
+.wrap_target
+    set pins, 3    
+    set pins, 0
+.wrap
+
+% c-sdk {
+
+// Helper function (for use in C program) to initialize this PIO program
+void pulse_program_init(PIO pio, uint sm, uint offset, uint pin, float div) {
+
+    // Sets up state machine and wrap target. This function is automatically
+    // generated in blink.pio.h.
+    pio_sm_config c = pulse_program_get_default_config(offset);
+
+    // Allow PIO to control GPIO pin (as output)
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin+1);
+    // Connect pin to SET pin (control with 'set' instruction)
+    sm_config_set_set_pins(&c, pin, 2);
+
+    // Set the pin direction to output (in PIO)
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+    
+    // Set the clock divider for the state machine
+    sm_config_set_clkdiv(&c, div);
+
+    // Load configuration and jump to start of the program
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+%}

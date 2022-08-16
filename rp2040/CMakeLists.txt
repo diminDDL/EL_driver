@@ -1,0 +1,38 @@
+cmake_minimum_required(VERSION 3.12)
+
+set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
+# Pull in SDK (must be before project)
+include(${PICO_SDK_PATH}\\pico_sdk_init.cmake)
+
+project(el_dirver C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+
+pico_sdk_init()
+
+add_executable(${PROJECT_NAME} main.cpp)
+
+
+# pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})          # set SPI clock slower than CPU clock so that it works
+# target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+# pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
+
+
+pico_generate_pio_header(${PROJECT_NAME}  
+        ${CMAKE_CURRENT_LIST_DIR}/driver.pio
+)
+
+# pull in common dependencies
+target_link_libraries(${PROJECT_NAME}
+        pico_stdlib
+        hardware_pio
+)
+
+
+# create map/bin/hex file etc.
+pico_add_extra_outputs(${PROJECT_NAME})
+
+
+# enable usb output, disable uart output
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
