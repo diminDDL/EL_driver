@@ -1,33 +1,112 @@
-.program pulse
+.program driver
 
-; Turn on LED for 100 cycles and off for 100 cycles.
-; At 2 kHz, this will toggle pin at 10 Hz (200 cycles / 2000 Hz = 0.1 sec)
-
+; First we configure the X size (X display size / 4 (since we send 4 pixels at a time))),
+; after that you dump data in the fifo and the PIO will read it and put it on the data pins 4 bits at a time
+; pulsing the VCLK and HS, clock program does the rest of the clocks by reading the interrupts
+    pull
+    mov X, OSR          ; X size decrement
+    mov Y, X            ; X size constant
+lineEnd:
+    mov X, Y            ; copy the value back in to X
+    irq 0               ; fire an interrupt to the other PIO to let it know that we completed a line
+    set pins 0          ; set the clock pins to 0
 .wrap_target
-    set pins, 3    
-    set pins, 0
+    jmp x-- transfer    ; if x is not zero go forth and transfer the data
+    set pins 2          ; if x is zero that means we reached the end of the row, run a HS pulse and reset the registers
+    jmp lineEnd        ; go back to the reset code
+transfer:
+    out pins, 4         ; output the data to the data pins
+    set pins 1          ; set the VLCK pin to 1
+    set pins 0          ; set the VLCK pin to 0
 .wrap
 
 % c-sdk {
 
 // Helper function (for use in C program) to initialize this PIO program
-void pulse_program_init(PIO pio, uint sm, uint offset, uint pin, float div) {
+// dataBasePin - base pin for data pins - uses 4 pins after that
+// CLKBasepin is used for VCLK and the next pin is assumed to be HS
+void driver_program_init(PIO pio, uint sm, uint offset, uint dataBasePin, uint CLKBasepin, float div) {
 
-    // Sets up state machine and wrap target. This function is automatically
-    // generated in blink.pio.h.
-    pio_sm_config c = pulse_program_get_default_config(offset);
+    // Sets up state machine and wrap target. This function is automatically generated
+    pio_sm_config c = driver_program_get_default_config(offset);
+
+    // join the in FIFO because we aren't sending any data back
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
     // Allow PIO to control GPIO pin (as output)
-    pio_gpio_init(pio, pin);
-    pio_gpio_init(pio, pin+1);
+    pio_gpio_init(pio, dataBasePin);
+    pio_gpio_init(pio, dataBasePin+1);
+    pio_gpio_init(pio, dataBasePin+2);
+    pio_gpio_init(pio, dataBasePin+3);
+    pio_gpio_init(pio, CLKBasepin);
+    pio_gpio_init(pio, CLKBasepin+1);
     // Connect pin to SET pin (control with 'set' instruction)
-    sm_config_set_set_pins(&c, pin, 2);
+    sm_config_set_set_pins(&c, CLKBasepin, 2);
+
+    // Configure OUT pins
+    sm_config_set_out_pins(&c, dataBasePin, 4);
 
     // Set the pin direction to output (in PIO)
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, dataBasePin, 4, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, CLKBasepin, 2, true);
     
     // Set the clock divider for the state machine
     sm_config_set_clkdiv(&c, div);
+
+    // set auto pull thresholds to 32
+    sm_config_set_out_shift(&c, true, true, 32);
+
+    // Load configuration and jump to start of the program
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+%}
+
+.program clock
+; send the display Y pixel number as first FIFO transfer.
+; Generates VS clock signal for the driver.
+
+    pull
+    mov Y, OSR          ; Y size decrement
+    mov X, Y            ; Y size constant
+frameEnd:
+    mov Y, X            ; Y size decrement reset
+    set pins 0          ; set the VS pins to 0
+.wrap_target
+    jmp Y-- continue
+    set pins 1          ; set the VS pins to 1
+    jmp frameEnd        ; go back to the reset code
+continue:
+    wait 1 irq 0        ; wait for an interrupt to happen and clear it
+.wrap
+
+% c-sdk {
+
+// Helper function (for use in C program) to initialize this PIO program
+// dataBasePin - base pin for data pins - uses 4 pins after that
+// CLKBasepin is used for VCLK and the next pin is assumed to be HS
+void clock_program_init(PIO pio, uint sm, uint offset, uint VSpin, float div) {
+
+    // Sets up state machine and wrap target. This function is automatically generated
+    pio_sm_config c = clock_program_get_default_config(offset);
+
+    // join the in FIFO because we aren't sending any data back
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+
+    // Allow PIO to control GPIO pin (as output)
+    pio_gpio_init(pio, VSpin);
+
+    // Set the pin direction to output (in PIO)
+    pio_sm_set_consecutive_pindirs(pio, sm, VSpin, 1, true);
+
+    // Connect pin to SET pin (control with 'set' instruction)
+    sm_config_set_set_pins(&c, VSpin, 1);
+    
+    // Set the clock divider for the state machine
+    sm_config_set_clkdiv(&c, div);
+
+    // set auto pull thresholds to 32
+    sm_config_set_out_shift(&c, true, true, 32);
 
     // Load configuration and jump to start of the program
     pio_sm_init(pio, sm, offset, &c);

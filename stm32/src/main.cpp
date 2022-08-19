@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-//    Draw direction    ◄────
+//    Draw direction    ────►
 
 // │  ┌─────────────────────────────┐
 // │  │ ▲                           │
@@ -17,8 +17,6 @@
 
 
 //   drawByte ────────► 10101010
-
-
 
 
 const uint8_t VCLK = PB9; 
@@ -656,9 +654,6 @@ void setup() {
 }
 bool st = false;
 
-
-
-
 void loop() {
 
   while(1){
@@ -676,19 +671,12 @@ uint8_t buff = 0;
 uint16_t toDraw = 0; 
 uint16_t toDrawInv = 0;
 
-
-
-
-
-
-
-
 buff = drawLeft >> 1;
 toDraw = buff & 0b0000000001111000;
 toDrawInv = ~toDraw ^ ~0b0000000001111000;
-GPIOB->BSRR = toDraw;//0b0000000001000000; //set PB3,5(VID0, VID2)  only to HIGH
-GPIOB->BSRR = toDrawInv << 16;//0b0000000000111000 << 16; //set PB4,6(VID1, VID3) only to LOW
-currX += 4;
+GPIOB->BSRR = toDraw;
+GPIOB->BSRR = toDrawInv << 16;	// put 4 bits of data on the data pins
+currX += 4;	// increment currecnt position counter
 
 GPIOB->BSRR = 0b0000001000000000; //set PB9(VCLK) only to HIGH  
 GPIOB->BSRR = 0b0000001000000000 << 16; //set PB9(VCLK) only to LOW 
@@ -696,33 +684,26 @@ GPIOB->BSRR = 0b0000001000000000 << 16; //set PB9(VCLK) only to LOW
   if(currX >= maxX){
     currX = 0;
     currY += 1;
-    if(currY >= maxY){
-      // digitalWriteFast(digitalPinToPinName(VS), HIGH);
+    if(currY >= maxY){	// if the end if the display was reached pulse vertical and horizontal sync
       GPIOB->BSRR = 0b0000000010000000; //set PB7(VS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), HIGH);
       GPIOB->BSRR = 0b0000000000000001; //set PB0(HS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), LOW);
       GPIOB->BSRR = 0b0000000000000001 << 16; //set PB0(HS) only to LOW
-      // digitalWriteFast(digitalPinToPinName(VS), LOW);
       GPIOB->BSRR = 0b0000000010000000 << 16; //set PB7(VS) only to LOW
       currY = 0;
       st = !st;
-    }else{
-      // digitalWriteFast(digitalPinToPinName(HS), HIGH);
+    }else{	// if we just reached the end of the X line pulse the horizontal sync line
       GPIOB->BSRR = 0b0000000000000001; //set PB0(HS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), LOW);
       GPIOB->BSRR = 0b0000000000000001 << 16; //set PB0(HS) only to LOW
       st = !st;
     }
   }
 
-
-
+// the same but for the second part of the byte
 buff = drawRight << 3;
 toDraw = buff & 0b0000000001111000;
 toDrawInv = ~toDraw ^ ~0b0000000001111000;
-GPIOB->BSRR = toDraw;//0b0000000001000000; //set PB3,5(VID0, VID2)  only to HIGH
-GPIOB->BSRR = toDrawInv << 16;//0b0000000000111000 << 16; //set PB4,6(VID1, VID3) only to LOW
+GPIOB->BSRR = toDraw;
+GPIOB->BSRR = toDrawInv << 16;
 currX += 4;
 
 GPIOB->BSRR = 0b0000001000000000; //set PB9(VCLK) only to HIGH  
@@ -732,61 +713,17 @@ GPIOB->BSRR = 0b0000001000000000 << 16; //set PB9(VCLK) only to LOW
     currX = 0;
     currY += 1;
     if(currY >= maxY){
-      // digitalWriteFast(digitalPinToPinName(VS), HIGH);
       GPIOB->BSRR = 0b0000000010000000; //set PB7(VS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), HIGH);
       GPIOB->BSRR = 0b0000000000000001; //set PB0(HS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), LOW);
       GPIOB->BSRR = 0b0000000000000001 << 16; //set PB0(HS) only to LOW
-      // digitalWriteFast(digitalPinToPinName(VS), LOW);
       GPIOB->BSRR = 0b0000000010000000 << 16; //set PB7(VS) only to LOW
       currY = 0;
       st = !st;
     }else{
-      // digitalWriteFast(digitalPinToPinName(HS), HIGH);
       GPIOB->BSRR = 0b0000000000000001; //set PB0(HS) only to HIGH
-      // digitalWriteFast(digitalPinToPinName(HS), LOW);
       GPIOB->BSRR = 0b0000000000000001 << 16; //set PB0(HS) only to LOW
       st = !st;
     }
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // Example program
-// #include <iostream>
-// #include <string>
-// using namespace std;
-// uint8_t draw = 0b00001111;
-// uint8_t buff = 0;
-// uint16_t toDraw = 0; 
-// uint16_t toDrawInv = 0;
-
-// int main()
-// {
-    
-//     buff = draw << 3;
-//   toDraw = buff & 0b0000000001111000;
-//   toDrawInv = ~toDraw ^ ~0b0000000001111000;
-  
-//   cout << toDraw << "\n";
-//   cout << toDrawInv << "\n";
-// }
