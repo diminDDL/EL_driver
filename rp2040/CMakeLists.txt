@@ -8,14 +8,21 @@ project(el_dirver C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING
+      "Choose the type of build, options are: Debug Release
+RelWithDebInfo MinSizeRel."
+      FORCE)
+endif(NOT CMAKE_BUILD_TYPE)
+
 pico_sdk_init()
 
 add_executable(${PROJECT_NAME} main.cpp)
 
-
-# pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})          # set SPI clock slower than CPU clock so that it works
-# target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
-# pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
+# set SPI clock slower than CPU clock so that it works
+pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
+target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
 
 
 pico_generate_pio_header(${PROJECT_NAME}  
@@ -25,7 +32,13 @@ pico_generate_pio_header(${PROJECT_NAME}
 # pull in common dependencies
 target_link_libraries(${PROJECT_NAME}
         pico_stdlib
+        pico_bootrom
+        hardware_structs
+        hardware_sync
+        hardware_vreg
+        hardware_clocks
         hardware_pio
+        hardware_dma
 )
 
 

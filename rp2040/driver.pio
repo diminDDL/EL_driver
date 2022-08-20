@@ -4,13 +4,15 @@
 ; after that you dump data in the fifo and the PIO will read it and put it on the data pins 4 bits at a time
 ; pulsing the VCLK and HS, clock program does the rest of the clocks by reading the interrupts
     pull
-    mov X, OSR          ; X size decrement
+    out X, 32          ; X size decrement
     mov Y, X            ; X size constant
+    jmp startTransfer   ; jump to start of transfer
 lineEnd:
     mov X, Y            ; copy the value back in to X
     irq 0               ; fire an interrupt to the other PIO to let it know that we completed a line
     set pins 0          ; set the clock pins to 0
 .wrap_target
+startTransfer:
     jmp x-- transfer    ; if x is not zero go forth and transfer the data
     set pins 2          ; if x is zero that means we reached the end of the row, run a HS pulse and reset the registers
     jmp lineEnd        ; go back to the reset code
