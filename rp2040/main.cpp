@@ -51,7 +51,7 @@ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
     return button_state;
 }
 
-void __no_inline_not_in_flash_func(compute_framebuffer)(bool currBuff) {
+void __no_inline_not_in_flash_func(compute_framebuffer)(bool currBuff) {    // <<<--- this is wrong, it is computing it vertically and not horizontally
     // check each pixel value in frameBuffer and the value of iteration, if the pixel is less than iteration, set it to 0 else set it to 1
     for (int y = 0; y < displayYsize; ++y) {
         for (int x = 0; x < displayXsize; ++x) {
@@ -76,7 +76,7 @@ void fill_buffer(uint type = 0){
     if(type == 0){
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
-                frameBuffer[y][x] = 0xFF;
+                frameBuffer[y][x] = 0x7F;
             }
         }
     }else if(type == 1){
@@ -95,20 +95,17 @@ void fill_buffer(uint type = 0){
     }
 }
 
-void __no_inline_not_in_flash_func(configureDMA)(bool currBuff);
+void configureDMA(bool currBuff);
 
 void __no_inline_not_in_flash_func(dma_irq_handler)(){
     // acknowledge the interrupt
     dma_hw->ints0 = (1u << dma_chan);
-    gpio_put(ledPin, true);
     currentBuffer = !currentBuffer;
     iteration++;
     configureDMA(currentBuffer);
 }
 
-void __no_inline_not_in_flash_func(configureDMA)(bool currBuff){
-    // Get a free channel, panic() if there are none
-    dma_chan = dma_claim_unused_channel(true);
+void configureDMA(bool currBuff){
     // make a dma config
     dma_channel_config dma_conf = dma_channel_get_default_config(dma_chan);
     // transfer uint32_t
@@ -138,6 +135,7 @@ void __no_inline_not_in_flash_func(configureDMA)(bool currBuff){
     // configure DMA interrupts
     dma_channel_set_irq0_enabled(dma_chan, true);
     irq_set_exclusive_handler(DMA_IRQ_0, dma_irq_handler);
+    irq_set_enabled(DMA_IRQ_0, true);
     dma_channel_start(dma_chan);
 }
 
@@ -152,7 +150,7 @@ int main()
     gpio_set_dir(ledPin, GPIO_OUT);
 
     static const uint led_pin = 0;
-    static const float pio_freq = 100000;
+    static const float pio_freq = 80000000;
 
     pio = pio0;
     smData = pio_claim_unused_sm(pio, true);
@@ -171,14 +169,18 @@ int main()
     pio_sm_put_blocking(pio, smData, (displayXsize/4));
     pio_sm_put_blocking(pio, smClock, (displayYsize));
     fill_buffer(1);
+
+    // Get a free channel, panic() if there are none
+    dma_chan = dma_claim_unused_channel(true);
+    compute_framebuffer(currentBuffer);
+    compute_framebuffer(!currentBuffer);
     configureDMA(currentBuffer);
-    
     bool oldBufferState = false;
     while(true)
     {
-        if(get_bootsel_button()){
-            reset_usb_boot(0,0);
-        }
+        // if(get_bootsel_button()){
+        //     reset_usb_boot(0,0);
+        // }
         if(oldBufferState != currentBuffer){
             compute_framebuffer(!currentBuffer);
             oldBufferState = currentBuffer;
