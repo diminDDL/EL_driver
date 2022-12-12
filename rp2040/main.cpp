@@ -8,6 +8,7 @@
 #include "hardware/vreg.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
+#include "hardware/irq.h"
 #include "driver.pio.h"
 
 unsigned static const int displayXsize = 320;

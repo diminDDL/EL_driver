@@ -39,6 +39,7 @@ target_link_libraries(${PROJECT_NAME}
         hardware_clocks
         hardware_pio
         hardware_dma
+        hardware_irq
 )
 
 
