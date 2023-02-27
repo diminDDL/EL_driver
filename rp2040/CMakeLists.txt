@@ -17,7 +17,23 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 pico_sdk_init()
 
+link_directories(${CMAKE_SOURCE_DIR}/lib)
+
 add_executable(${PROJECT_NAME} main.cpp)
+
+
+AUX_SOURCE_DIRECTORY(lib SUB_SOURCES)
+
+target_sources(
+    ${PROJECT_NAME}
+    PUBLIC
+    ${SUB_SOURCES}
+)
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/lib
+)
 
 # set SPI clock slower than CPU clock so that it works
 pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})

@@ -14,8 +14,13 @@
 unsigned static const int displayXsize = 320;
 unsigned static const int displayYsize = 240;
 
+unsigned static const int displayXsizeDiv32 = displayXsize / 32;
+unsigned static const int displayYsizeDiv32 = displayYsize / 32;
+
+const uint8_t brRollover = 2;
+
 // pinout:
-// Data pins: 1-4
+// Data pins: 2-5
 // VCLK - 6
 // HS - 7
 // VS - 8
@@ -23,11 +28,13 @@ unsigned static const int displayYsize = 240;
 unsigned static int dataStartPin = 2;       // uses the next 4 pins for data
 unsigned static int controlStartPin = 6;    // uses 3 pins for control
 
-uint8_t frameBuffer[displayYsize][displayXsize];
-volatile uint32_t intermediaryFrameBuffer1[displayYsize * displayXsize / 32];
-volatile uint32_t intermediaryFrameBuffer2[displayYsize * displayXsize / 32];
+uint8_t frameBuffer[displayYsize][displayXsize] = {0};
+volatile uint32_t intermediaryFrameBuffer1[displayYsize * displayXsizeDiv32] = {0};
+volatile uint32_t intermediaryFrameBuffer2[displayYsize * displayXsizeDiv32] = {0};
 volatile bool currentBuffer = true;
+volatile bool computeComplete = false;
 volatile uint8_t iteration = 0;
+
 
 // internal use variables
 int dma_chan;
@@ -52,21 +59,23 @@ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
     return button_state;
 }
 
-void __no_inline_not_in_flash_func(compute_framebuffer)(bool currBuff) {    // <<<--- this is wrong, it is computing it vertically and not horizontally
+void __time_critical_func(compute_framebuffer)(bool currBuff) {    // <<<--- this is wrong, it is computing it vertically and not horizontally
     // check each pixel value in frameBuffer and the value of iteration, if the pixel is less than iteration, set it to 0 else set it to 1
     for (int y = 0; y < displayYsize; ++y) {
         for (int x = 0; x < displayXsize; ++x) {
             if (frameBuffer[y][x] <= iteration) {
                 if(currBuff){
-                    intermediaryFrameBuffer1[y * displayXsize / 32 + x / 32] &= ~(1 << (x % 32));
+                    // x >> 5 is the same as x / 32
+                    // x & 0b0011111 is the same as x % 32
+                    intermediaryFrameBuffer1[y * displayXsizeDiv32 + (x >> 5)] &= ~(1 << (x & 0b0011111));
                 }else{
-                    intermediaryFrameBuffer2[y * displayXsize / 32 + x / 32] &= ~(1 << (x % 32));
+                    intermediaryFrameBuffer2[y * displayXsizeDiv32 + (x >> 5)] &= ~(1 << (x & 0b0011111));
                 }
             } else {
                 if(currBuff){
-                    intermediaryFrameBuffer1[y * displayXsize / 32 + x / 32] |= 1 << (x % 32);
+                    intermediaryFrameBuffer1[y * displayXsizeDiv32 + (x >> 5)] |= 1 << (x & 0b0011111);
                 }else{
-                    intermediaryFrameBuffer2[y * displayXsize / 32 + x / 32] |= 1 << (x % 32);
+                    intermediaryFrameBuffer2[y * displayXsizeDiv32 + (x >> 5)] |= 1 << (x & 0b0011111);
                 }
             }
         }
@@ -74,19 +83,63 @@ void __no_inline_not_in_flash_func(compute_framebuffer)(bool currBuff) {    // <
 }
 
 void fill_buffer(uint type = 0){
-    if(type == 0){
+    // first we fill it with zeros
+    if(type != 0){
+        fill_buffer(0);
+    }
+    if(type == 1){
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
-                frameBuffer[y][x] = 0x7F;
+                frameBuffer[y][x] = 1;
             }
         }
-    }else if(type == 1){
+    }else if(type == 2){
        for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
                 // if x is even then set to 0xFF else 0x00
                 frameBuffer[y][x] = (x % 2 == 0) ? 0xFF : 0x00;
             }
         } 
+    }else if(type == 3){
+        // fill in checkerboard pattern
+        for(int y = 0; y < displayYsize; y++){
+            for(int x = 0; x < displayXsize; x++){
+                // if x is even then set to 0xFF else 0x00
+                if(y % 2 == 0)
+                    frameBuffer[y][x] = (x % 2 == 0) ? 0xFF : 0x00;
+                else
+                    frameBuffer[y][x] = (x % 2 == 0) ? 0x00 : 1;
+            }
+        }
+    }else if(type == 4){
+        // fill the display with iterating brightness values
+        uint brightness = 0;
+        for(int y = 0; y < displayYsize; y++){
+            for(int x = 0; x < displayXsize; x++){
+                frameBuffer[y][x] = brightness;
+                brightness++;
+                if(brightness > brRollover)
+                    brightness = 0;
+            }
+        }
+    }else if(type == 5){
+        // fill a few very specific pixels
+        frameBuffer[0][0] = 0xFF;
+        frameBuffer[0][1] = 0xFF;
+        frameBuffer[0][2] = 0xFF;
+        frameBuffer[0][3] = 0xFF;
+        frameBuffer[displayYsize - 1][0] = 0xFF;
+        frameBuffer[displayYsize - 1][1] = 0xFF;
+        frameBuffer[displayYsize - 1][2] = 0xFF;
+        frameBuffer[displayYsize - 1][3] = 0xFF;
+        frameBuffer[0][displayXsize - 1] = 0xFF;
+        frameBuffer[0][displayXsize - 2] = 0xFF;
+        frameBuffer[0][displayXsize - 3] = 0xFF;
+        frameBuffer[0][displayXsize - 4] = 0xFF;
+        frameBuffer[displayYsize - 1][displayXsize - 1] = 0xFF;
+        frameBuffer[displayYsize - 1][displayXsize - 2] = 0xFF;
+        frameBuffer[displayYsize - 1][displayXsize - 3] = 0xFF;
+        frameBuffer[displayYsize - 1][displayXsize - 4] = 0xFF;
     }else{
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
@@ -96,17 +149,23 @@ void fill_buffer(uint type = 0){
     }
 }
 
-void configureDMA(bool currBuff);
+void __time_critical_func(configureDMA)(bool currBuff);
 
-void __no_inline_not_in_flash_func(dma_irq_handler)(){
+void __time_critical_func(dma_irq_handler)(){
     // acknowledge the interrupt
     dma_hw->ints0 = (1u << dma_chan);
-    currentBuffer = !currentBuffer;
-    iteration++;
-    configureDMA(currentBuffer);
+    if(computeComplete){
+        iteration++;
+        currentBuffer = !currentBuffer;
+        computeComplete = false;
+    }
+    if(iteration >= brRollover){
+        iteration = 0;
+    }
+    configureDMA(currentBuffer);    
 }
 
-void configureDMA(bool currBuff){
+void __time_critical_func(configureDMA)(bool currBuff){
     // make a dma config
     dma_channel_config dma_conf = dma_channel_get_default_config(dma_chan);
     // transfer uint32_t
@@ -122,14 +181,14 @@ void configureDMA(bool currBuff){
         dma_channel_configure(dma_chan, &dma_conf,
                               &pio->txf[smData],                    // Destinatinon pointer
                               &intermediaryFrameBuffer1,            // Source pointer
-                              (displayYsize * displayXsize / 32),   // Number of transfers
+                              (displayYsize * displayXsizeDiv32),   // Number of transfers
                               false                                 // Start immediately
         );
     }else{
         dma_channel_configure(dma_chan, &dma_conf,
                               &pio->txf[smData],                    // Destinatinon pointer
                               &intermediaryFrameBuffer2,            // Source pointer
-                              (displayYsize * displayXsize / 32),   // Number of transfers
+                              (displayYsize * displayXsizeDiv32),   // Number of transfers
                               false                                 // Start immediately
         );
     }
@@ -142,7 +201,7 @@ void configureDMA(bool currBuff){
 
 int main()
 {
-    vreg_set_voltage(VREG_VOLTAGE_1_30);
+    vreg_set_voltage(VREG_VOLTAGE_MAX);
     set_sys_clock_khz(400000, true);
     //set_sys_clock_khz(100000, true);
     stdio_init_all();
@@ -151,7 +210,7 @@ int main()
     gpio_set_dir(ledPin, GPIO_OUT);
 
     static const uint led_pin = 0;
-    static const float pio_freq = 80000000;
+    static const float pio_freq = 30000000;
 
     pio = pio0;
     smData = pio_claim_unused_sm(pio, true);
@@ -159,33 +218,42 @@ int main()
     float divData = (float)clock_get_hz(clk_sys) / pio_freq;
     //float divData = 1;
     driver_program_init(pio, smData, offsetData, dataStartPin, controlStartPin, divData);
-    pio_sm_set_enabled(pio, smData, true);
+    
     smClock = pio_claim_unused_sm(pio, true);
     uint offsetClock = pio_add_program(pio, &clock_program);
     float divClock = (float)clock_get_hz(clk_sys) / pio_freq;
     //float divClock = 1;
     clock_program_init(pio, smClock, offsetClock, 8, divClock);
-    pio_sm_set_enabled(pio, smClock, true);
+    
 
     pio_sm_put_blocking(pio, smData, (displayXsize/4));
+    pio_sm_set_enabled(pio, smData, true);
     pio_sm_put_blocking(pio, smClock, (displayYsize));
+    pio_sm_set_enabled(pio, smClock, true);
     fill_buffer(1);
 
     // Get a free channel, panic() if there are none
     dma_chan = dma_claim_unused_channel(true);
+
     compute_framebuffer(currentBuffer);
     compute_framebuffer(!currentBuffer);
+
     configureDMA(currentBuffer);
     bool oldBufferState = false;
+    gpio_put(ledPin, 1);
     while(true)
     {
         // if(get_bootsel_button()){
         //     reset_usb_boot(0,0);
         // }
-        if(oldBufferState != currentBuffer){
+        if(oldBufferState != currentBuffer && !computeComplete){
             compute_framebuffer(!currentBuffer);
             oldBufferState = currentBuffer;
+            computeComplete = true;
         }
+        // static uint32_t last1 = 0;
+        // printf("compute: %d\n", time_us_32() - last1);
+        // last1 = time_us_32();
     }
     return 0;
 }

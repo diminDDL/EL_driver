@@ -10,7 +10,7 @@
 lineEnd:
     mov X, Y   [2]      ; copy the value back in to X
     set pins 2 [8]      ; if x is zero that means we reached the end of the row, run a HS pulse and reset the registers
-    set pins 0          ; set the clock pins to 0
+    set pins 0 [5]      ; set the clock pins to 0
 .wrap_target
 startTransfer:
     jmp x-- transfer    ; if x is not zero go forth and transfer the data
@@ -18,8 +18,8 @@ startTransfer:
     jmp lineEnd         ; go back to the reset code
 transfer:
     out pins, 4         ; output the data to the data pins
-    set pins 1 [2]      ; set the VLCK pin to 1
-    set pins 0          ; set the VLCK pin to 0
+    set pins 1 [5]      ; set the VLCK pin to 1
+    set pins 0 [3]      ; set the VLCK pin to 0
 .wrap
 
 % c-sdk {
@@ -67,10 +67,10 @@ void driver_program_init(PIO pio, uint sm, uint offset, uint dataBasePin, uint C
 .program clock
 ; send the display Y pixel number as first FIFO transfer.
 ; Generates VS clock signal for the driver.
-
     pull
     mov Y, OSR          ; Y size decrement
     mov X, Y            ; Y size constant
+    jmp continue        ; jump to start of transfer
 frameEnd:
     mov Y, X [20]       ; Y size decrement reset
     set pins 0          ; set the VS pins to 0
