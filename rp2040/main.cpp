@@ -9,6 +9,7 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
+#include "pico/multicore.h"
 #include "driver.pio.h"
 
 unsigned static const int displayXsize = 320;
@@ -140,6 +141,13 @@ void fill_buffer(uint type = 0){
         frameBuffer[displayYsize - 1][displayXsize - 2] = 0xFF;
         frameBuffer[displayYsize - 1][displayXsize - 3] = 0xFF;
         frameBuffer[displayYsize - 1][displayXsize - 4] = 0xFF;
+    }else if(type == 6){
+        // fill the display with random values
+        for(int y = 0; y < displayYsize; y++){
+            for(int x = 0; x < displayXsize; x++){
+                frameBuffer[y][x] = (x ^ y) % 9;
+            }
+        }
     }else{
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
@@ -199,6 +207,17 @@ void __time_critical_func(configureDMA)(bool currBuff){
     dma_channel_start(dma_chan);
 }
 
+void core1(){
+    bool oldBufferState = false;
+    while(1){
+        if(oldBufferState != currentBuffer && !computeComplete){
+            compute_framebuffer(!currentBuffer);
+            oldBufferState = currentBuffer;
+            computeComplete = true;
+        }
+    }
+}
+
 int main()
 {
     vreg_set_voltage(VREG_VOLTAGE_MAX);
@@ -239,21 +258,14 @@ int main()
     compute_framebuffer(!currentBuffer);
 
     configureDMA(currentBuffer);
-    bool oldBufferState = false;
     gpio_put(ledPin, 1);
+    multicore_launch_core1(core1);
     while(true)
     {
-        // if(get_bootsel_button()){
-        //     reset_usb_boot(0,0);
-        // }
-        if(oldBufferState != currentBuffer && !computeComplete){
-            compute_framebuffer(!currentBuffer);
-            oldBufferState = currentBuffer;
-            computeComplete = true;
-        }
-        // static uint32_t last1 = 0;
-        // printf("compute: %d\n", time_us_32() - last1);
-        // last1 = time_us_32();
+        fill_buffer(6);
+        sleep_ms(1000);
+        fill_buffer(5);
+        sleep_ms(1000);
     }
     return 0;
 }
