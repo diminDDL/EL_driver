@@ -10,6 +10,7 @@
 #include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "pico/multicore.h"
+#include "tusb.h"
 #include "driver.pio.h"
 
 unsigned static const int displayXsize = 320;
@@ -60,7 +61,7 @@ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
     return button_state;
 }
 
-void __time_critical_func(compute_framebuffer)(bool currBuff) {    // <<<--- this is wrong, it is computing it vertically and not horizontally
+void __time_critical_func(compute_framebuffer)(bool currBuff) {
     // check each pixel value in frameBuffer and the value of iteration, if the pixel is less than iteration, set it to 0 else set it to 1
     for (int y = 0; y < displayYsize; ++y) {
         for (int x = 0; x < displayXsize; ++x) {
@@ -84,10 +85,7 @@ void __time_critical_func(compute_framebuffer)(bool currBuff) {    // <<<--- thi
 }
 
 void fill_buffer(uint type = 0){
-    // first we fill it with zeros
-    if(type != 0){
-        fill_buffer(0);
-    }
+    static uint16_t offset = 0;
     if(type == 1){
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
@@ -124,6 +122,7 @@ void fill_buffer(uint type = 0){
             }
         }
     }else if(type == 5){
+        fill_buffer(0);
         // fill a few very specific pixels
         frameBuffer[0][0] = 0xFF;
         frameBuffer[0][1] = 0xFF;
@@ -145,9 +144,13 @@ void fill_buffer(uint type = 0){
         // fill the display with random values
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
-                frameBuffer[y][x] = (x ^ y) % 9;
+                frameBuffer[y][x] = ((x+offset)^(y+offset)) % ~9;
             }
         }
+        offset++;
+    }else if(type == 7){
+        fill_buffer(0);
+        // nothing for now
     }else{
         for(int y = 0; y < displayYsize; y++){
             for(int x = 0; x < displayXsize; x++){
@@ -207,7 +210,7 @@ void __time_critical_func(configureDMA)(bool currBuff){
     dma_channel_start(dma_chan);
 }
 
-void core1(){
+void __time_critical_func(core1)(){
     bool oldBufferState = false;
     while(1){
         if(oldBufferState != currentBuffer && !computeComplete){
@@ -260,12 +263,62 @@ int main()
     configureDMA(currentBuffer);
     gpio_put(ledPin, 1);
     multicore_launch_core1(core1);
+    while (!tud_cdc_connected()) {
+        tight_loop_contents();
+    }
     while(true)
     {
-        fill_buffer(6);
-        sleep_ms(1000);
-        fill_buffer(5);
-        sleep_ms(1000);
+        // fill_buffer(6);
+        // sleep_ms(10);
+
+        puts("A");
+        bool broke = false;
+
+        for (uint32_t y = 0; y < displayYsize; y++) {
+            for (uint32_t x = 0; x < displayXsize/4; x++){
+                char buf[1];
+                bool timeout = false;
+                uint32_t start = time_us_32();
+                while(!timeout && !tud_cdc_available()){
+                    if(time_us_32() - start > 1000){
+                        timeout = true;
+                    }
+                }
+
+                if(!timeout){
+                    tud_cdc_read(buf, sizeof(buf));
+                }else{
+                    broke = true;
+                    break;
+                }
+                // c1 = getchar_timeout_us(1000);
+                // // c1 = getchar_timeout_us(1000000);
+                // if(c1 == PICO_ERROR_TIMEOUT){
+                //     broke = true;
+                //     break;
+                // }
+                uint8_t c = (uint8_t)buf[0];
+                // byte structure:
+                // 00 00 00 00 - 1 byte
+                // each collection of 2 bits is a brightness value
+                // 00 = black
+                // 01 = 1 - 50% in our case
+                // 10 || 11 = 2 - 100% in our case
+                uint8_t pixels[4] = {0};
+                for(int j = 0; j < 4; j++){
+                    // since this is little endian the encoding will be backwards
+                    pixels[j] = (c >> (j*2)) & 0b11;
+                }
+                // fill the frame buffer
+                frameBuffer[y][x*4] = pixels[0];
+                frameBuffer[y][x*4+1] = pixels[1];
+                frameBuffer[y][x*4+2] = pixels[2];
+                frameBuffer[y][x*4+3] = pixels[3];
+            }
+            if(broke){
+                break;
+            }
+        }
     }
     return 0;
 }
