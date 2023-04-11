@@ -31,6 +31,7 @@ unsigned static int dataStartPin = 2;       // uses the next 4 pins for data
 unsigned static int controlStartPin = 6;    // uses 3 pins for control
 
 uint8_t frameBuffer[displayYsize][displayXsize] = {0};
+uint8_t tmpframeBuffer[displayYsize][displayXsize] = {0};
 volatile uint32_t intermediaryFrameBuffer1[displayYsize * displayXsizeDiv32] = {0};
 volatile uint32_t intermediaryFrameBuffer2[displayYsize * displayXsizeDiv32] = {0};
 volatile bool currentBuffer = true;
@@ -310,14 +311,18 @@ int main()
                     pixels[j] = (c >> (j*2)) & 0b11;
                 }
                 // fill the frame buffer
-                frameBuffer[y][x*4] = pixels[0];
-                frameBuffer[y][x*4+1] = pixels[1];
-                frameBuffer[y][x*4+2] = pixels[2];
-                frameBuffer[y][x*4+3] = pixels[3];
+                tmpframeBuffer[y][x*4] = pixels[0];
+                tmpframeBuffer[y][x*4+1] = pixels[1];
+                tmpframeBuffer[y][x*4+2] = pixels[2];
+                tmpframeBuffer[y][x*4+3] = pixels[3];
             }
             if(broke){
                 break;
             }
+        }
+        // copy tmpframeBuffer into the real frame buffer
+        if(!broke){
+            memcpy(frameBuffer, tmpframeBuffer, sizeof(frameBuffer));
         }
     }
     return 0;
