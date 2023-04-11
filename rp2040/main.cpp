@@ -12,6 +12,7 @@
 #include "pico/multicore.h"
 #include "tusb.h"
 #include "driver.pio.h"
+#include "lib/font.h"
 
 unsigned static const int displayXsize = 320;
 unsigned static const int displayYsize = 240;
@@ -272,54 +273,62 @@ int main()
         // fill_buffer(6);
         // sleep_ms(10);
 
+        // start time
+        //uint32_t startTime = time_us_32();
+
         puts("A");
         bool broke = false;
-
+        
         for (uint32_t y = 0; y < displayYsize; y++) {
-            for (uint32_t x = 0; x < displayXsize/4; x++){
-                char buf[1];
+            for (uint32_t x = 0; x < displayXsize/8; x++){
+                char buf[2];
                 bool timeout = false;
                 uint32_t start = time_us_32();
                 while(!timeout && !tud_cdc_available()){
-                    if(time_us_32() - start > 1000){
+                    if(time_us_32() - start > 100000){
                         timeout = true;
                     }
                 }
-
+            
                 if(!timeout){
                     tud_cdc_read(buf, sizeof(buf));
                 }else{
                     broke = true;
                     break;
                 }
-                // c1 = getchar_timeout_us(1000);
-                // // c1 = getchar_timeout_us(1000000);
-                // if(c1 == PICO_ERROR_TIMEOUT){
-                //     broke = true;
-                //     break;
-                // }
-                uint8_t c = (uint8_t)buf[0];
+                uint8_t c1 = (uint8_t)buf[0];
+                uint8_t c2 = (uint8_t)buf[1];
                 // byte structure:
                 // 00 00 00 00 - 1 byte
                 // each collection of 2 bits is a brightness value
                 // 00 = black
                 // 01 = 1 - 50% in our case
                 // 10 || 11 = 2 - 100% in our case
-                uint8_t pixels[4] = {0};
+                uint8_t pixels1[4] = {0};
+                uint8_t pixels2[4] = {0};
                 for(int j = 0; j < 4; j++){
                     // since this is little endian the encoding will be backwards
-                    pixels[j] = (c >> (j*2)) & 0b11;
+                    pixels1[j] = (c1 >> (j*2)) & 0b11;
+                    pixels2[j] = (c2 >> (j*2)) & 0b11;
                 }
                 // fill the frame buffer
-                tmpframeBuffer[y][x*4] = pixels[0];
-                tmpframeBuffer[y][x*4+1] = pixels[1];
-                tmpframeBuffer[y][x*4+2] = pixels[2];
-                tmpframeBuffer[y][x*4+3] = pixels[3];
+                tmpframeBuffer[y][x*8] = pixels1[0];
+                tmpframeBuffer[y][x*8+1] = pixels1[1];
+                tmpframeBuffer[y][x*8+2] = pixels1[2];
+                tmpframeBuffer[y][x*8+3] = pixels1[3];
+                tmpframeBuffer[y][x*8+4] = pixels2[0];
+                tmpframeBuffer[y][x*8+5] = pixels2[1];
+                tmpframeBuffer[y][x*8+6] = pixels2[2];
+                tmpframeBuffer[y][x*8+7] = pixels2[3];
             }
             if(broke){
                 break;
             }
         }
+        gpio_put(ledPin, broke);
+        // uint32_t deltaTime = time_us_32() - startTime;
+        // printf("Time: %d", deltaTime);
+
         // copy tmpframeBuffer into the real frame buffer
         if(!broke){
             memcpy(frameBuffer, tmpframeBuffer, sizeof(frameBuffer));

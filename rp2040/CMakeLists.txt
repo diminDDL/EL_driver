@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 
-set(PICO_SDK_PATH $ENV{PICO_SDK_PATH})
-# Pull in SDK (must be before project)
-include(${PICO_SDK_PATH}\\pico_sdk_init.cmake)
+# Include build functions from Pico SDK
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include($ENV{PICO_SDK_PATH}/tools/CMakeLists.txt)
 
 project(el_dirver C CXX ASM)
 set(CMAKE_C_STANDARD 11)
@@ -19,7 +19,9 @@ pico_sdk_init()
 
 link_directories(${CMAKE_SOURCE_DIR}/lib)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} 
+    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+)
 
 
 AUX_SOURCE_DIRECTORY(lib SUB_SOURCES)
