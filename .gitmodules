@@ -1,0 +1,3 @@
+[submodule "displayStreamerC"]
+	path = displayStreamerC
+	url = https://github.com/diminDDL/displayStreamerC.git
