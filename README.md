@@ -3,6 +3,8 @@ Driver for EL320.240.36 using an RP2040 or STM32. The STM32 code is just a proto
 
 This repository contains code required to drive and stream your display to an EL display with a 4 bit parallel HS VS interface. Including 50% pixel brightness through PWM dimming.
 
+More info can be found in the writeup on my website [here](https://dmytroengineering.com/content/projects/how-i-went-about-el-display).
+
 See it in action here:
 
 [![YouTube video](https://img.youtube.com/vi/tvotsRGWCcw/0.jpg)](https://www.youtube.com/watch?v=tvotsRGWCcw)
